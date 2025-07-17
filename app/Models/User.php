@@ -74,7 +74,7 @@ public function isUser()
 public function isPM()
 {
     return $this->hasRole('pm');
-}
+}   
 
 public function isViewer()
 {

@@ -73,7 +73,6 @@ public function store(Request $request)
         abort(403, 'Unauthorized');
     }
 
-    // Validate input
     $request->validate([
         'title' => 'required|string|max:255',
         'description' => 'nullable|string',
@@ -83,16 +82,17 @@ public function store(Request $request)
         'deadline' => 'nullable|date',
     ]);
 
-    // ✅ Only override user_id if current user is NOT an admin
     $taskData = $request->all();
+
     if (!$user->isAdmin()) {
-        $taskData['user_id'] = $user->id; // Force assignment to self
+        $taskData['user_id'] = $user->id; // non-admins can only assign to themselves
     }
 
     Task::create($taskData);
 
     return redirect()->route('tasks.index')->with('success', 'Task created successfully.');
 }
+
 
 
     // 🔹 4. Show edit form
@@ -114,42 +114,55 @@ public function store(Request $request)
 
     // 🔹 5. Update a task
     public function update(Request $request, Task $task)
-    {
-        $user = Auth::user();
+{
+    $user = Auth::user();
+    // 🔹 Admin: can update everything
 
-        if ($user->isAdmin()) {
-            $request->validate([
-                'title' => 'required|string|max:255',
-                'description' => 'nullable|string',
-                'status' => 'required|in:pending,in_progress,completed',
-                'priority' => 'required|in:low,medium,high',
-                'user_id' => 'required|exists:users,id',
-                'deadline' => 'nullable|date',
-            ]);
-            $task->update($request->all());
-            return redirect()->route('tasks.index')->with('success', 'Task updated.');
-        }
+    if ($user->isAdmin()) {
 
-        if ($user->isUser() && $task->user_id === $user->id) {
-            $request->validate([
-                'title' => 'required|string|max:255',
-                'description' => 'nullable|string',
-                'priority' => 'required|in:low,medium,high',
-            ]);
-            $task->update($request->only('title', 'description', 'priority'));
-            return redirect()->route('tasks.index')->with('success', 'Task updated.');
-        }
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'priority' => 'required|in:low,medium,high',
+            'status' => 'required|in:pending,in_progress,completed',
+            'deadline' => 'nullable|date',
+            'user_id' => 'required|exists:users,id',
+        ]);
 
-        if ($user->isPM() && $task->pm_id === $user->id) {
-            $request->validate([
-                'status' => 'required|in:pending,in_progress,completed',
-            ]);
-            $task->update($request->only('status'));
-            return redirect()->route('tasks.index')->with('success', 'Task status updated.');
-        }
+        $task->update($request->all());
 
-        abort(403, 'Unauthorized');
+        return redirect()->route('tasks.index')->with('success', 'Task updated successfully.');
     }
+
+    // 🔹 Normal user: can update their own task, except status
+    if ($user->isUser() && $task->user_id === $user->id) {
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'priority' => 'required|in:low,medium,high',
+            'deadline' => 'nullable|date',
+        ]);
+
+        // Ensure these fields exist in the form
+        $task->update($request->only('title', 'description', 'priority', 'deadline'));
+
+        return redirect()->route('tasks.index')->with('success', 'Your task was updated.');
+    }
+
+    // 🔹 Project Manager: can only update status
+    if ($user->isPM() && $task->pm_id === $user->id) {
+        $request->validate([
+            'status' => 'required|in:pending,in_progress,completed',
+        ]);
+
+        $task->update(['status' => $request->status]);
+
+        return redirect()->route('tasks.index')->with('success', 'Task status updated by PM.');
+    }
+
+    abort(403, 'Unauthorized');
+}
+
 
     // 🔹 6. Delete a task
     public function destroy(Task $task)

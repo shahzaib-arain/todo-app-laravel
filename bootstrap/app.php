@@ -28,3 +28,4 @@ return Application::configure(basePath: dirname(__DIR__))
         // You can register custom exception handlers here (optional)
     })
     ->create();
+    
